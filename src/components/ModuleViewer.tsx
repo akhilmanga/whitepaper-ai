@@ -242,7 +242,10 @@ const ModuleViewer: React.FC<ModuleViewerProps> = ({
                     Attempts: {module.quiz.attempts} &nbsp;|&nbsp; Score: {module.quiz.score ?? 'N/A'}%
                   </p>
                 </div>
+                {console.log("Rendering QuizEngine with courseId:", courseId, "moduleId:", module.id)}
                 <QuizEngine 
+                  courseId={courseId}
+                  moduleId={module.id}
                   quiz={{
                     ...module.quiz,
                     questions: module.quiz.questions.map(q => ({

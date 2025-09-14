@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { 
   CheckCircleIcon, 
   XCircleIcon,
@@ -28,11 +28,16 @@ interface QuizEngineProps {
 }
 
 const QuizEngine: React.FC<QuizEngineProps> = ({ quiz, moduleId, courseId }) => {
+  console.log("courseId:", courseId, "moduleId:", moduleId)
   const [answers, setAnswers] = useState<Record<string, string>>({})
   const [submitted, setSubmitted] = useState(false)
   const [results, setResults] = useState<any>(null)
   const [loading, setLoading] = useState(false)
   const [showExplanations, setShowExplanations] = useState(false)
+
+  useEffect(() => {
+    console.log("Mounted QuizEngine with courseId:", courseId, "moduleId:", moduleId)
+  }, [courseId, moduleId])
 
   if (!quiz || !quiz.questions || quiz.questions.length === 0) {
     return (
@@ -65,7 +70,7 @@ const QuizEngine: React.FC<QuizEngineProps> = ({ quiz, moduleId, courseId }) => 
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ answers })
+        body: JSON.stringify({ answers, quiz })
       })
 
       if (!response.ok) {
@@ -105,6 +110,7 @@ const QuizEngine: React.FC<QuizEngineProps> = ({ quiz, moduleId, courseId }) => 
             <h4 className="text-lg font-medium text-gray-900">
               Question {index + 1}
             </h4>
+            <p className="text-sm text-gray-500 italic">{question.type}</p>
           </div>
           {submitted && (
             <div className={`flex items-center space-x-1 ${
@@ -150,7 +156,7 @@ const QuizEngine: React.FC<QuizEngineProps> = ({ quiz, moduleId, courseId }) => 
                   disabled={submitted}
                   className="text-primary-600"
                 />
-                <span className="text-gray-900">{option}</span>
+                <span className="text-gray-900">{String.fromCharCode(65 + optionIndex)}. {option}</span>
               </label>
             ))}
           </div>
@@ -199,6 +205,7 @@ const QuizEngine: React.FC<QuizEngineProps> = ({ quiz, moduleId, courseId }) => 
                 <strong>Correct answer:</strong> {question.correctAnswer}
               </p>
             )}
+            <p className="text-xs text-gray-400 mt-1">ID: {question.id}</p>
           </div>
         )}
       </div>
