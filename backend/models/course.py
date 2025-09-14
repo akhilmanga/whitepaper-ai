@@ -10,6 +10,7 @@ class Flashcard(BaseModel):
     difficulty: int
     lastReviewed: Optional[str] = None
     nextReview: Optional[str] = None
+    module_id: str
 
 class Question(BaseModel):
     id: str
@@ -18,19 +19,22 @@ class Question(BaseModel):
     options: Optional[List[str]] = None
     correctAnswer: str
     explanation: str
+    quiz_id: str
 
 class Quiz(BaseModel):
     id: str = str(uuid.uuid4())  # Auto-generated
     questions: List[Question] = []  # Default empty
     score: Optional[float] = None
     attempts: int = 0
+    module_id: str
 
 class Module(BaseModel):
     id: str
     title: str
     content: str
-    flashcards: List[Flashcard] = []  # Optional with default
-    quiz: Optional[Quiz] = None      # Optional with default
+    course_id: str
+    flashcards: Optional[Flashcard] = None  # Optional with default
+    quiz: Optional[Quiz] = None     # Optional with default
     completed: bool = False
     timeSpent: int = 0
     estimatedTime: int = 0
@@ -41,7 +45,7 @@ class Course(BaseModel):
     title: str
     description: str
     objectives: List[str]
-    modules: List[Module]
+    modules: List[str]
     progress: float = 0.0
     estimatedTime: int
     difficulty: str

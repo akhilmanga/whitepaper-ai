@@ -41,7 +41,6 @@ Whitepaper AI transforms complex technical whitepapers into structured, interact
 - Node.js 18+
 - Python 3.9+
 - Azure AI credentials
-- MongoDB instance
 - Firebase project
 
 ### Installation
@@ -54,44 +53,57 @@ cd whitepaper-ai
 
 2. Install frontend dependencies:
 ```bash
-cd frontend
 npm install
 ```
 
 3. Install backend dependencies:
 ```bash
-cd ../backend
 pip install -r requirements.txt
 ```
 
 4. Set up environment variables:
 ```bash
-# Create .env file in backend directory
-AZURE_AI_TOKEN=your_token_here
-AZURE_AI_ENDPOINT=https://models.inference.ai.azure.com
-AZURE_AI_MODEL_NAME=gpt-4o
-MONGODB_URI=your_mongodb_uri
-FIREBASE_CONFIG=your_firebase_config
+# Create .env file in root directory
+AZURE_AI_TOKEN="your_token_here"
+AZURE_AI_ENDPOINT=https://models.inference.ai.azure.com/
+AZURE_AI_MODEL_NAME=Meta-Llama-3.1-405B-Instruct
+DEVELOPMENT=true
+VITE_API_BASE_URL="http://localhost:8000/"
+VITE_FIREBASE_API_KEY="your_firebase_key"
+VITE_FIREBASE_AUTH_DOMAIN="whitepaper-ai-clone.firebaseapp.com"
+VITE_FIREBASE_STORAGE_BUCKET="whitepaper-ai-clone.firebasestorage.app"
+VITE_FIREBASE_MESSAGING_SENDER_ID="980420866394"
+VITE_FIREBASE_APP_ID="1:980420866394:web:748ee34da4861f37e34363"
+FIREBASE_CONFIG="whitepaper-ai-clone-firebase.creds.json"
+# If deploying on Render, copy the full contents of your Firebase credentials JSON into an environment variable named FIREBASE_CONFIG (as a single line string)
 ```
 
 5. Start the applications:
 ```bash
-# Terminal 1 - Backend
-cd backend
-uvicorn main:app --reload
+# Build frontend
+npm run build
 
-# Terminal 2 - Frontend
-cd frontend
-npm run dev
+# Start backend server
+uvicorn backend.main:app --reload
 ```
 
 ## Project Structure
 
 ```
 whitepaper-ai/
-├── frontend/               # React application
-├── backend/                # FastAPI server
-├── config/                 # Configuration files
+├── backend/                              # FastAPI server
+├── config.node.json                      # Node configuration
+├── dist/                                 # Compiled frontend output
+├── node_modules/                         # Node.js dependencies
+├── src/                                  # React source code
+├── vite.config.ts                        # Vite configuration
+├── package.json                          # NPM package manifest
+├── package-lock.json                     # NPM lock file
+├── postcss.config.js                     # PostCSS config
+├── tailwind.config.js                    # Tailwind CSS config
+├── ts-config.json                        # TypeScript config
+├── whitepaper-ai-clone-firebase.creds.json  # Firebase credentials
+├── setup.sh                              # Setup script
 └── README.md
 ```
 
@@ -105,6 +117,31 @@ whitepaper-ai/
 ## Contributing
 
 Please read the PRD document for detailed requirements and implementation guidelines.
+
+## Deployment on Render
+
+You can easily deploy this app on [Render](https://render.com/) using the following steps:
+
+### 1. Backend (FastAPI)
+- Create a new **Web Service** on Render.
+- Set the environment to `Python 3.9`.
+- Your FastAPI app should serve static files directly from the `dist/` directory.
+- Use the following start command:
+  ```
+  uvicorn backend.main:app --host 0.0.0.0 --port 10000
+  ```
+- Add the necessary environment variables from your `.env` file to the Render dashboard.
+- Ensure that `requirements.txt` is located in the **root** directory and use it to install dependencies.
+- If your Firebase credentials are in a file, copy the **entire JSON content** and store it as the environment variable `FIREBASE_CONFIG`.
+
+### 2. Frontend Deployment
+- The React app is prebuilt and served by FastAPI from the `/dist` directory.
+- Ensure your backend is configured to serve the static frontend by mounting the `dist/` directory (e.g., using `StaticFiles` in FastAPI).
+- No separate static site deployment is necessary.
+
+### Notes:
+- Make sure CORS is properly configured in FastAPI for production.
+- To enable proper routing, use [Render’s rewrite rules](https://render.com/docs/web-services#redirects-rewrites-and-retries) for single-page applications.
 
 ## License
 
