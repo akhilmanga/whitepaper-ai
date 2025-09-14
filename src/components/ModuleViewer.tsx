@@ -15,9 +15,10 @@ import toast from 'react-hot-toast'
 
 export interface Flashcard {
   id: string
-  front: string
-  back: string
-  difficulty: number
+  question: string
+  answer: string
+  generated_at?: string
+  difficulty?: number
 }
 
 export interface Question {
@@ -31,9 +32,11 @@ export interface Question {
 
 export interface Quiz {
   id: string
-  questions: Question[]
+  title?: string
+  questions: (Question & { type?: string })[]
   score?: number
   attempts: number
+  timeSpent?: number
 }
 
 interface Module {
@@ -204,7 +207,11 @@ const ModuleViewer: React.FC<ModuleViewerProps> = ({
         {activeTab === 'flashcards' && (
           <>
             {module.flashcards && module.flashcards.length > 0 ? (
-              <FlashcardSystem flashcards={module.flashcards} />
+              <FlashcardSystem flashcards={module.flashcards.map(fc => ({
+                ...fc,
+                front: fc.question,
+                back: fc.answer
+              }))} />
             ) : (
               <div className="text-center py-12">
                 <LightBulbIcon className="mx-auto h-12 w-12 text-gray-400" />
@@ -226,10 +233,26 @@ const ModuleViewer: React.FC<ModuleViewerProps> = ({
         {activeTab === 'quiz' && (
           <>
             {module.quiz && module.quiz.questions?.length > 0 ? (
-              <QuizEngine 
-                quiz={module.quiz} 
-                onSubmit={handleQuizSubmit}
-              />
+              <>
+                <div className="mb-4">
+                  {module.quiz.title && (
+                    <h3 className="text-lg font-semibold text-gray-900">{module.quiz.title}</h3>
+                  )}
+                  <p className="text-sm text-gray-600">
+                    Attempts: {module.quiz.attempts} &nbsp;|&nbsp; Score: {module.quiz.score ?? 'N/A'}%
+                  </p>
+                </div>
+                <QuizEngine 
+                  quiz={{
+                    ...module.quiz,
+                    questions: module.quiz.questions.map(q => ({
+                      ...q,
+                      type: 'multiple-choice'
+                    }))
+                  }} 
+                  onSubmit={handleQuizSubmit}
+                />
+              </>
             ) : (
               <div className="text-center py-12">
                 <QuestionMarkCircleIcon className="mx-auto h-12 w-12 text-gray-400" />

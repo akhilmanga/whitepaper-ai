@@ -19,11 +19,18 @@ interface FlashcardSystemProps {
 }
 
 const FlashcardSystem: React.FC<FlashcardSystemProps> = ({ flashcards }) => {
+  // Normalize incoming flashcards to expected interface
+  const normalizedFlashcards = flashcards.map((card) => ({
+    id: card.id,
+    front: card.front || card.question,
+    back: card.back || card.answer,
+    difficulty: card.difficulty || 1,
+  }))
   const [currentIndex, setCurrentIndex] = useState(0)
   const [isFlipped, setIsFlipped] = useState(false)
   const [showAll, setShowAll] = useState(false)
 
-  if (!flashcards || flashcards.length === 0) {
+  if (!normalizedFlashcards || normalizedFlashcards.length === 0) {
     return (
       <div className="text-center py-12">
         <div className="bg-gray-100 rounded-lg p-8">
@@ -34,15 +41,15 @@ const FlashcardSystem: React.FC<FlashcardSystemProps> = ({ flashcards }) => {
     )
   }
 
-  const currentCard = flashcards[currentIndex]
+  const currentCard = normalizedFlashcards[currentIndex]
 
   const handleNext = () => {
-    setCurrentIndex((prev) => (prev + 1) % flashcards.length)
+    setCurrentIndex((prev) => (prev + 1) % normalizedFlashcards.length)
     setIsFlipped(false)
   }
 
   const handlePrevious = () => {
-    setCurrentIndex((prev) => (prev - 1 + flashcards.length) % flashcards.length)
+    setCurrentIndex((prev) => (prev - 1 + normalizedFlashcards.length) % normalizedFlashcards.length)
     setIsFlipped(false)
   }
 
@@ -52,7 +59,7 @@ const FlashcardSystem: React.FC<FlashcardSystemProps> = ({ flashcards }) => {
 
   const handleShuffle = () => {
     // In a real implementation, you'd shuffle the flashcards array
-    setCurrentIndex(Math.floor(Math.random() * flashcards.length))
+    setCurrentIndex(Math.floor(Math.random() * normalizedFlashcards.length))
     setIsFlipped(false)
   }
 
@@ -71,7 +78,7 @@ const FlashcardSystem: React.FC<FlashcardSystemProps> = ({ flashcards }) => {
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">
-          {flashcards.map((card, index) => (
+          {normalizedFlashcards.map((card, index) => (
             <div key={card.id} className="border border-gray-200 rounded-lg p-4">
               <div className="mb-3">
                 <span className="text-xs font-medium text-gray-500">Card {index + 1}</span>
@@ -94,7 +101,7 @@ const FlashcardSystem: React.FC<FlashcardSystemProps> = ({ flashcards }) => {
         <div>
           <h3 className="text-lg font-semibold text-gray-900">Flashcards</h3>
           <p className="text-sm text-gray-600">
-            Card {currentIndex + 1} of {flashcards.length}
+            Card {currentIndex + 1} of {normalizedFlashcards.length}
           </p>
         </div>
         
@@ -175,7 +182,7 @@ const FlashcardSystem: React.FC<FlashcardSystemProps> = ({ flashcards }) => {
         </button>
 
         <div className="flex space-x-1">
-          {flashcards.map((_, index) => (
+          {normalizedFlashcards.map((_, index) => (
             <button
               key={index}
               onClick={() => {

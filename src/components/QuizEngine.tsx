@@ -23,10 +23,11 @@ interface Quiz {
 
 interface QuizEngineProps {
   quiz: Quiz
-  onSubmit: (answers: Record<string, string>) => Promise<any>
+  moduleId: string
+  courseId: string
 }
 
-const QuizEngine: React.FC<QuizEngineProps> = ({ quiz, onSubmit }) => {
+const QuizEngine: React.FC<QuizEngineProps> = ({ quiz, moduleId, courseId }) => {
   const [answers, setAnswers] = useState<Record<string, string>>({})
   const [submitted, setSubmitted] = useState(false)
   const [results, setResults] = useState<any>(null)
@@ -59,12 +60,25 @@ const QuizEngine: React.FC<QuizEngineProps> = ({ quiz, onSubmit }) => {
 
     setLoading(true)
     try {
-      const result = await onSubmit(answers)
+      const response = await fetch(`/api/courses/${courseId}/modules/${moduleId}/quiz`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ answers })
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to submit quiz')
+      }
+
+      const result = await response.json()
       setResults(result)
       setSubmitted(true)
       setShowExplanations(true)
     } catch (error) {
       console.error('Failed to submit quiz:', error)
+      alert('Something went wrong while submitting the quiz.')
     } finally {
       setLoading(false)
     }
@@ -84,9 +98,14 @@ const QuizEngine: React.FC<QuizEngineProps> = ({ quiz, onSubmit }) => {
     return (
       <div key={question.id} className="border border-gray-200 rounded-lg p-6">
         <div className="flex items-start justify-between mb-4">
-          <h4 className="text-lg font-medium text-gray-900">
-            Question {index + 1}
-          </h4>
+          <div>
+            <span className="inline-block mb-1 px-2 py-0.5 text-xs font-semibold text-white bg-gray-500 rounded-full">
+              {question.type}
+            </span>
+            <h4 className="text-lg font-medium text-gray-900">
+              Question {index + 1}
+            </h4>
+          </div>
           {submitted && (
             <div className={`flex items-center space-x-1 ${
               isCorrect ? 'text-green-600' : 'text-red-600'
