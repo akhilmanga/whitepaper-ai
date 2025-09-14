@@ -11,7 +11,7 @@ def initialize_firebase():
     if not firebase_admin._apps:
         try:
             # Method 1: Using service account file (recommended for development)
-            service_account_path = "firebase-service-account.json"
+            service_account_path = "whitepaper-ai-clone-firebase.creds.json"
             if os.path.exists(service_account_path):
                 cred = credentials.Certificate(service_account_path)
                 firebase_admin.initialize_app(cred)

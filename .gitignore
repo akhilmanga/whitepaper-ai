@@ -21,7 +21,6 @@ __pycache__/
 .Python
 build/
 develop-eggs/
-dist/
 downloads/
 eggs/
 .eggs/
@@ -81,7 +80,7 @@ backend/firebase-service-account-key.json
 frontend/firebase-service-account-key.json
 
 # Firebase config (if accidentally placed)
-*.json
+*.creds.json
 
 # =========================
 # IDE & Editors

@@ -86,8 +86,8 @@ class AzureWhitepaperProcessor:
                         raise ValueError(f"Failed to call Azure AI: {str(e)}")
             raise ValueError("Max retries exceeded")
 
-    def _extract_json(self, text: str) -> dict:
-        """Extract first valid JSON object from text (no recursive regex)"""
+    def _extract_json(self, text: str) -> Any:
+        """Extract the first valid JSON array or object from text."""
         stack = []
         start = None
         in_string = False
@@ -103,18 +103,18 @@ class AzureWhitepaperProcessor:
                 in_string = not in_string
             if in_string:
                 continue
-            if char == '{':
+            if char in ['{', '[']:
                 if not stack:
                     start = i
                 stack.append(char)
-            elif char == '}' and stack:
-                stack.pop()
+            elif char in ['}', ']'] and stack:
+                opening = stack.pop()
                 if not stack and start is not None:
                     try:
                         return json.loads(text[start:i+1])
                     except json.JSONDecodeError:
                         pass
-        raise ValueError("No valid JSON object found in response")
+        raise ValueError("No valid JSON object or array found in response")
 
     async def _generate_complete_course(self, text: str, title: Optional[str] = None) -> Dict[str, Any]:
         analysis_text = text[:12000] if len(text) > 12000 else text
@@ -146,12 +146,8 @@ class AzureWhitepaperProcessor:
             for module in course_data.get("modules", []):
                 module["id"] = str(uuid.uuid4())
                 module["source_text"] = analysis_text
-                module["flashcards"] = []
-                module["quiz"] = {
-                    "id": str(uuid.uuid4()),
-                    "questions": [],
-                    "attempts": 0
-                }
+                module["flashcard"] = None
+                module["quiz"] = None
                 module.setdefault("completed", False)
                 module.setdefault("timeSpent", 0)
             return course_data
@@ -232,11 +228,20 @@ class AzureWhitepaperProcessor:
     async def generate_module_flashcards(self, module_title: str, module_content: str, source_text: str) -> List[Dict[str, Any]]:
         await asyncio.sleep(3)
         num_flashcards = min(max(3, len(module_content.split()) // 200), 6)
-        prompt = f"Create {num_flashcards} flashcards for: {module_title}. Content: {module_content[:1200]}. JSON array."
-        messages = [{"role": "system", "content": "Respond with JSON array only."}, {"role": "user", "content": prompt}]
+        messages = [
+            {"role": "system", "content": "Respond ONLY with a JSON array of objects. No commentary, no markdown."},
+            {"role": "user", "content": (
+                f"Generate exactly {num_flashcards} flashcards from the following text.\n"
+                f"Each flashcard must be a JSON object with the keys: 'question' and 'answer'.\n"
+                f"Return a single JSON array, like:\n"
+                f"[{{\"question\": \"...\", \"answer\": \"...\"}}, ...]\n\n"
+                f"Content:\n{module_content[:1200]}"
+            )}
+        ]
         try:
             response = await self._call_azure_openai(messages, max_tokens=1000)
-            cards = json.loads(self._extract_json(response))
+            cards = self._extract_json(response)
+            print(f"\n\n{type(cards)}\n{cards}\n\n")
             for card in cards:
                 card["id"] = str(uuid.uuid4())
                 card["generated_at"] = f"{asyncio.get_event_loop().time()}"

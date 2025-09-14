@@ -3,7 +3,7 @@ import axios from 'axios'
 import { auth } from '../config/firebase'
 
 // Use port 8002 (matches your main.py)
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8002'
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 
 const apiClient = axios.create({
     baseURL: API_BASE_URL,
