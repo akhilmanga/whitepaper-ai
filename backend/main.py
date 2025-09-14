@@ -1,25 +1,58 @@
 from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 import os
 from dotenv import load_dotenv
 import asyncio
 from typing import Optional, Dict, Any
 import uuid
 
-from azure_processor import AzureWhitepaperProcessor
-from models.course import Course, ProcessingStatus
+from backend.azure_processor import AzureWhitepaperProcessor
+from backend.models.course import Course, ProcessingStatus, Module
 # from firebase_config import get_current_user  # Temporarily disabled
-from database import get_database, startup_db
+from backend.database import connect_to_db, startup_db
 
 load_dotenv()
 
+# ----- Ensure NLTK and spaCy resources are available -----
+import nltk
+import spacy
+from nltk.data import find as nltk_find
+from spacy.util import is_package
+
+# Ensure NLTK data is available
+try:
+    nltk_find('tokenizers/punkt')
+except LookupError:
+    print("🔽 Downloading NLTK 'punkt'...")
+    nltk.download('punkt')
+
+try:
+    nltk_find('corpora/stopwords')
+except LookupError:
+    print("🔽 Downloading NLTK 'stopwords'...")
+    nltk.download('stopwords')
+
+# Ensure spaCy model is available
+model_name = "en_core_web_sm"
+if not is_package(model_name):
+    try:
+        spacy.load(model_name)
+    except OSError:
+        print(f"🔽 Downloading spaCy model '{model_name}'...")
+        from spacy.cli import download
+        download(model_name)
+
 app = FastAPI(title="Whitepaper AI API", version="1.0.0")
+
+# Global database variable, set on startup
+db = None
 
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # Frontend URL
+    allow_origins=["*"],  # Frontend URL
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -28,7 +61,16 @@ app.add_middleware(
 # Startup event
 @app.on_event("startup")
 async def startup_event():
-    await startup_db()
+    try:
+        db_instance = await startup_db()
+        if db_instance is None:
+            raise RuntimeError("DB returned None")
+        global db
+        db = db_instance
+        print("✅ DB is ready for use")
+    except Exception as e:
+        print(f"❌ Failed to initialize DB: {e}")
+        raise
 
 # Global processor instance
 processor = AzureWhitepaperProcessor()
@@ -37,9 +79,6 @@ print("✅ Azure WhitepaperProcessor initialized")
 # In-memory storage for processing status (use Redis in production)
 processing_status: Dict[str, ProcessingStatus] = {}
 
-@app.get("/")
-async def root():
-    return {"message": "Whitepaper AI API", "version": "1.0.0"}
 
 @app.post("/api/test-upload")
 async def test_upload(file: UploadFile = File(...)):
@@ -185,14 +224,22 @@ async def process_whitepaper_background(
         processing_status[processing_id].message = "Generating interactive content..."
         processing_status[processing_id].progress = 70
 
-        db = get_database()
+        # Inject IDs into each module and insert into module collection
+        modules = course_data.get("modules", [])
+        for each in modules:
+            each_mod = Module(**each, course_id=processing_id)
+            await db.modules.insert_one(each_mod.model_dump())
+
+        # Update modules pointers from in course document
+        course_data["modules"] = [mod["id"] for mod in modules]
+
         course = Course(
             id=processing_id,
-            user_id="demo_user",  # ← Consistent user ID
+            user_id="demo_user",
             **course_data
         )
         await db.courses.insert_one(course.model_dump())
-        print("Course saved to database")
+        print("Course and modules saved to database")
 
         processing_status[processing_id].status = "completed"
         processing_status[processing_id].progress = 100
@@ -216,19 +263,29 @@ async def get_processing_status(processing_id: str):
 @app.get("/api/courses/{course_id}")
 async def get_course(course_id: str):
     """Get course by ID (using demo_user)"""
-    db = get_database()
     course = await db.courses.find_one({
         "id": course_id,
         "user_id": "demo_user"  # ← Match saved user ID
     })
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
+
+    # Expand module references if present
+    if "modules" in course:
+        module_ids = course["modules"]
+        full_modules = []
+        for mod_id in module_ids:
+            module = await db.modules.find_one({"id": mod_id})
+            if module:
+                full_modules.append(module)
+        course["modules"] = full_modules
+    # print(f"\n\n{course}\n\n")
+
     return course
 
 @app.get("/api/courses")
 async def get_user_courses():
     """Get all courses for demo user"""
-    db = get_database()
     courses = await db.courses.find({
         "user_id": "demo_user"  # ← Match saved user ID
     }).to_list(100)
@@ -241,7 +298,6 @@ async def update_module_progress(
     progress_data: dict
 ):
     """Update module progress (demo_user)"""
-    db = get_database()
     result = await db.courses.update_one(
         {
             "id": course_id,
@@ -262,15 +318,8 @@ async def update_module_progress(
 @app.post("/api/courses/{course_id}/modules/{module_id}/generate-quiz")
 async def generate_quiz(course_id: str, module_id: str):
     """Generate quiz for a specific module on-demand"""
-    db = get_database()
-    course = await db.courses.find_one({
-        "id": course_id,
-        "user_id": "demo_user"
-    })
-    if not course:
-        raise HTTPException(status_code=404, detail="Course not found")
-
-    module = next((m for m in course["modules"] if m["id"] == module_id), None)
+    module = await db.modules.find_one({"id": module_id})
+    # Now course["modules"] is a list of module IDs, not dicts.
     if not module:
         raise HTTPException(status_code=404, detail="Module not found")
 
@@ -281,14 +330,7 @@ async def generate_quiz(course_id: str, module_id: str):
             module.get("source_text", "")
         )
 
-        await db.courses.update_one(
-            {
-                "id": course_id,
-                "user_id": "demo_user",
-                "modules.id": module_id
-            },
-            {"$set": {"modules.$.quiz": quiz}}
-        )
+        await db.update_quiz(module_id, quiz)
         return quiz
     except Exception as e:
         print(f"Error generating quiz: {e}")
@@ -297,15 +339,8 @@ async def generate_quiz(course_id: str, module_id: str):
 @app.post("/api/courses/{course_id}/modules/{module_id}/generate-flashcards")
 async def generate_flashcards(course_id: str, module_id: str):
     """Generate flashcards for a specific module on-demand"""
-    db = get_database()
-    course = await db.courses.find_one({
-        "id": course_id,
-        "user_id": "demo_user"
-    })
-    if not course:
-        raise HTTPException(status_code=404, detail="Course not found")
-
-    module = next((m for m in course["modules"] if m["id"] == module_id), None)
+    module = await db.modules.find_one({"id": module_id})
+    # Now course["modules"] is a list of module IDs, not dicts.
     if not module:
         raise HTTPException(status_code=404, detail="Module not found")
 
@@ -316,14 +351,7 @@ async def generate_flashcards(course_id: str, module_id: str):
             module.get("source_text", "")
         )
 
-        await db.courses.update_one(
-            {
-                "id": course_id,
-                "user_id": "demo_user",
-                "modules.id": module_id
-            },
-            {"$set": {"modules.$.flashcards": flashcards}}
-        )
+        await db.update_flashcards(module_id, flashcards)
         return {"flashcards": flashcards}
     except Exception as e:
         print(f"Error generating flashcards: {e}")
@@ -336,15 +364,8 @@ async def submit_quiz(
     quiz_data: dict
 ):
     """Submit quiz answers and get results (demo_user)"""
-    db = get_database()
-    course = await db.courses.find_one({
-        "id": course_id,
-        "user_id": "demo_user"
-    })
-    if not course:
-        raise HTTPException(status_code=404, detail="Course not found")
-
-    module = next((m for m in course["modules"] if m["id"] == module_id), None)
+    module = await db.modules.find_one({"id": module_id})
+    # Now course["modules"] is a list of module IDs, not dicts.
     if not module:
         raise HTTPException(status_code=404, detail="Module not found")
 
@@ -382,7 +403,6 @@ async def export_course(course_id: str, format: str):
     if format not in ["pdf", "pptx", "notion"]:
         raise HTTPException(status_code=400, detail="Invalid export format")
 
-    db = get_database()
     course = await db.courses.find_one({
         "id": course_id,
         "user_id": "demo_user"
@@ -397,6 +417,19 @@ async def export_course(course_id: str, format: str):
     # For now, just return a placeholder
     return {"message": f"Export to {format} is not yet implemented"}
 
+# Mount static files for frontend
+app.mount("/", StaticFiles(directory="./dist", html=True), name="frontend")
+
+@app.get("/{full_path:path}")
+async def serve_spa(full_path: str):
+    if full_path.startswith("api/"):
+        raise HTTPException(status_code=404, detail="Not Found")
+
+    index_path = os.path.join("./dist", "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    raise HTTPException(status_code=404, detail="Page not found")
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8002)
+    uvicorn.run(app, host="0.0.0.0", port=8000)
