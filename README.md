@@ -4,7 +4,7 @@
 
 ## Overview
 
-Whitepaper AI transforms complex technical whitepapers into structured, interactive learning experiences using Azure AI's gpt-4o model. The platform analyzes academic and technical documents, breaks them into digestible learning modules, and generates interactive educational content including flashcards, quizzes, and progress tracking.
+Whitepaper AI transforms complex technical whitepapers into structured, interactive learning experiences using Azure AI's Meta-Llama-3.1-405B-Instruct model. The platform analyzes academic and technical documents, breaks them into digestible learning modules, and generates interactive educational content including flashcards, quizzes, and progress tracking.
 
 ## Features
 
